@@ -2,6 +2,7 @@
 import matplotlib.pyplot as plt
 import networkx as nx
 import geocoder
+import os
 from pprint import pprint
 from geopy.geocoders import Nominatim
 from pathlib import Path
@@ -50,8 +51,10 @@ def read_koenig_graph(path:str|Path, *, encoding:str="utf-8") -> nx.Graph:
 
 
 def geo_layout(graph:nx.Graph) -> dict:
-    cache_file = open("geodata.cache", "r+", encoding="utf-8")
-    geolocator = Nominatim(user_agent="mjölnir")
+    # get (and create) cache file
+    cache_filepath = "geodata.cache"
+    cache_filemode = "r+" if os.path.isfile(cache_filepath) else "x+"
+    cache_file = open(cache_filepath, cache_filemode, encoding="utf-8")
 
     # load cache file
     cached_geodata = {}
@@ -68,6 +71,7 @@ def geo_layout(graph:nx.Graph) -> dict:
         print(f"load cached geodata: {city=} {latitude=} {longitude=}")
 
     # extend cache file
+    geolocator = Nominatim(user_agent="mjölnir")
     for node_id, node_data in graph.nodes(data=True):
         city = node_data.get("name")
         if city in cached_geodata.keys():
