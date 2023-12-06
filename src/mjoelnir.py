@@ -4,6 +4,7 @@ import networkx as nx
 import geocoder
 import os
 from pprint import pprint
+from copy import deepcopy
 from geopy.geocoders import Nominatim
 from pathlib import Path
 from typing import Callable, Iterator, Any, Optional
@@ -12,15 +13,14 @@ from collections import namedtuple
 
 def read_koenig_graph(path:str|Path, *, encoding:str="utf-8") -> nx.Graph:
     file = open(path, "r", encoding=encoding)
-    lines = file.readlines()
     
     graph = nx.Graph()
     node_count = 0
 
     line_num = 0
-    for i, line in enumerate(lines):
+    for i, line in enumerate(file.readlines()):
         line = line.strip()
-        # skip comments and empty line
+        # skip comments and empty lines
         if line.startswith("#") or line == "":
             continue
 
@@ -33,7 +33,7 @@ def read_koenig_graph(path:str|Path, *, encoding:str="utf-8") -> nx.Graph:
         elif 1 <= line_num <= node_count:
             node_id = line_num - 1
             node_name = line
-            graph.add_node(node_id, name=node_name)
+            graph.add_node(node_id, name=node_name, node_id=node_id)
             print(f"add node: {node_id=} {node_name=}")
 
         # part 3: list of weighted edges
@@ -98,19 +98,64 @@ def geo_layout(graph:nx.Graph) -> dict:
 def draw(graph:nx.Graph, *, layout:Callable=nx.kamada_kawai_layout, save_to:str|Path=Optional) -> None:
     pos = layout(graph)
 
-    nx.draw_networkx_edges(graph, pos, width=2, alpha=0.8, edge_color="orange")
+    edge_colors = nx.get_edge_attributes(graph, "color", "orange").values()
+    nx.draw_networkx_edges(graph, pos, width=2, alpha=0.8, edge_color=edge_colors)
 
-    edge_weights = nx.get_edge_attributes(graph, "weight")
-    edge_labels = { edge: edge_weights[edge] for edge in edge_weights }
+    edge_labels = nx.get_edge_attributes(graph, "weight")
     nx.draw_networkx_edge_labels(graph, pos, edge_labels, font_size=6)
 
     nx.draw_networkx_nodes(graph, pos, node_size=30, alpha=1, node_color="red")
 
-    node_names = nx.get_node_attributes(graph, "name")
-    node_labels = { node: node_names[node] for node in node_names }
+    node_labels = nx.get_node_attributes(graph, "name")
     pos_shifted = { key: (item[0], item[1]+0.1) for key, item in pos.items() }
     nx.draw_networkx_labels(graph, pos_shifted, node_labels, font_size=10)
 
     if not save_to is Optional:
         plt.savefig(save_to, dpi=500)
     plt.show()
+
+
+def dijkstra(graph:nx.Graph, start_node_name:str, end_node_name:str) -> list[str]:
+    # use deep copy of given graph, delete at the end
+    graph = deepcopy(graph)
+
+    # find corresponding node ids
+    start_node_id = None
+    end_node_id = None
+
+    for node_id, node_data in graph.nodes(data=True):
+        node_name = node_data.get("name")
+
+        if node_name == start_node_name:
+            start_node_id = node_id
+        if node_name == end_node_name:
+            end_node_id = node_id
+    
+    print(f"{start_node_id=} {start_node_name=}")
+    print(f"{end_node_id=} {end_node_name=}")
+
+    # init default node attributes: distance=inf, visited=False, successor=None
+    inf = float("inf")
+    node_route = []
+
+    for node_id, node_data in graph.nodes(data=True):
+        nx.set_node_attributes(graph, inf, name="distance")
+        nx.set_node_attributes(graph, False, name="visited")
+        nx.set_node_attributes(graph, None, name="successor")
+
+    # dijkstra algorithm
+    # iterate over neighbors
+    neighbors = list( graph.neighbors(start_node_id) )
+    for neighbor in neighbors:
+        weights = nx.get_edge_attributes(graph, "weight")
+        weight = weights[ (start_node_id,neighbor) if (start_node_id,neighbor) in weights else (neighbor,start_node_id) ]
+        nx.set_node_attributes(graph, {neighbor: weight}, name="distance")
+
+        # todo
+
+        print(f"{neighbor=} {weight=}")
+
+    del graph
+    return []
+
+
